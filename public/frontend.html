@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Automatic Human Emotion, Alertness, and Behavioural Monitoring during Interactions</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-family: Arial, sans-serif;
+        }
+        h1 {
+            font-size: 2em;
+            text-align: center;
+        }
+        .input-group {
+            display: flex;
+            align-items: center;
+            margin-bottom: 1em;
+        }
+        .input-group label {
+            margin-right: 1em;
+        }
+        #result {
+            width: 80%;
+            padding: 1em;
+            margin-top: 1em;
+            text-align: justify;
+            line-height: 1.6;
+        }
+        .sentence {
+            position: relative;
+            cursor: pointer;
+        }
+        .popup {
+            display: none;
+            position: absolute;
+            background-color: #f9f9f9;
+            border: 1px solid #ccc;
+            padding: 10px;
+            max-width: 300px;
+            z-index: 1;
+            top: 100%;
+            left: 0;
+        }
+        .sentence:hover .popup {
+            display: block;
+        }
+        #overallEmotions {
+            margin-top: 1em;
+            padding: 1em;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background-color: #f9f9f9;
+        }
+    </style>
+    <script type="module" defer src="uploadfile.js"></script>
+</head>
+<body>
+<h1>Upload your files for transcription</h1>
+
+<div class="input-group">
+    <label for="videoFileInput">Upload your Video file:</label>
+    <input type="file" id="videoFileInput" accept=".mp4,video/*">
+</div>
+
+<div class="input-group">
+    <label for="csvFileInput">Upload your CSV file:</label>
+    <input type="file" id="csvFileInput" accept=".csv">
+</div>
+
+<div class="input-group">
+    <label for="eegFileInput">Upload your EEG CSV file:</label>
+    <input type="file" id="eegFileInput" accept=".csv">
+</div>
+
+<button id="uploadButton">Upload Files</button>
+<h2>Output:</h2>
+<div id="result"></div>
+
+<h2>Overall Emotions:</h2>
+<div id="overallEmotions"></div>
+
+<script>
+    document.getElementById('uploadButton').addEventListener('click', async () => {
+        const videoFileInput = document.getElementById('videoFileInput');
+        const csvFileInput = document.getElementById('csvFileInput');
+        const eegFileInput = document.getElementById('eegFileInput');
+
+        const videoFile = videoFileInput.files[0];
+        const csvFile = csvFileInput.files[0];
+        const eegFile = eegFileInput.files[0];
+
+        if (!videoFile || !csvFile || !eegFile) {
+            alert('Please select a video file, a CSV file, and an EEG CSV file to upload');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('videoFile', videoFile);
+        formData.append('csvFile', csvFile);
+        formData.append('eegFile', eegFile);
+
+        const response = await fetch('http://localhost:3000/upload', {
+            method: 'POST',
+            body: formData
+        });
+
+        if (response.ok) {
+            const result = await response.json();
+            const outputElement = document.getElementById('result');
+            outputElement.innerHTML = '';
+
+            // Display transcribe result as plain text
+            const transcribedText = result.transcribeResult.map(item => item.text).join(' ');
+            outputElement.innerHTML = transcribedText;
+
+            // Wrap each sentence in a span element with a unique class
+            outputElement.innerHTML = outputElement.innerHTML.replace(/([^.!?]+[.!?])/g, '<span class="sentence">$1<div class="popup"></div></span>');
+
+            // Populate the popup content for each sentence
+            const sentences = document.querySelectorAll('.sentence');
+            sentences.forEach((sentence, index) => {
+                const popup = sentence.querySelector('.popup');
+
+                // Display transcribe result
+                const transcribeResult = result.emotionResult[index];
+                popup.innerHTML += '<h4>Transcribe Result:</h4>';
+                if (transcribeResult) {
+                    popup.innerHTML += '<pre>' + JSON.stringify(transcribeResult.emotion, null, 2) + '</pre>';
+                } else {
+                    popup.innerHTML += '<p>Transcribe result unavailable for this sentence.</p>';
+                }
+
+                // Display recognize result
+                const recognizeResult = result.recognizeResult[index];
+                popup.innerHTML += '<h4>Recognize Result:</h4>';
+                if (recognizeResult) {
+                    popup.innerHTML += '<pre>' + JSON.stringify(recognizeResult.emotion, null, 2) + '</pre>';
+                } else {
+                    popup.innerHTML += '<p>Recognize result unavailable for this sentence.</p>';
+                }
+
+                // Display analyze result
+                const analyzeResult = result.analyzeResult[index];
+                popup.innerHTML += '<h4>Analyze Result:</h4>';
+                if (analyzeResult && analyzeResult.emotion !== 'Unidentifiable') {
+                    popup.innerHTML += '<pre>' + analyzeResult.emotion + '</pre>';
+                } else {
+                    popup.innerHTML += '<p>Analyze result unavailable or unidentifiable for this sentence.</p>';
+                }
+
+                // Display EEG result
+                const eegResult = result.eegResult[index];
+                popup.innerHTML += '<h4>EEG Result:</h4>';
+                if (eegResult && eegResult.emotion !== 'unknown') {
+                    popup.innerHTML += '<pre>' + eegResult.emotion + '</pre>';
+                } else {
+                    popup.innerHTML += '<p>EEG result unavailable or unknown for this sentence.</p>';
+                }
+            });
+
+            // Display overall emotions
+            const overallEmotionsElement = document.getElementById('overallEmotions');
+            overallEmotionsElement.innerHTML = '';
+
+            for (const module in result.overallEmotions) {
+                overallEmotionsElement.innerHTML += `<p><strong>${module}:</strong> ${result.overallEmotions[module]}</p>`;
+            }
+        } else {
+            alert('Failed to upload files');
+        }
+    });
+</script>
+</body>
+</html>
